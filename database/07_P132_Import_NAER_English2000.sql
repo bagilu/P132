@@ -10,7 +10,7 @@ begin
  for i in 1..char_length(p_text) loop
   ch:=substr(p_text,i,1);
   if ch='(' then dep:=dep+1; elsif ch=')' then dep:=greatest(dep-1,0); end if;
-  if ch=',' and dep=0 then
+  if (ch=',' or ch=chr(10) or ch=chr(13)) and dep=0 then
    v:=btrim(regexp_replace(buf,'\s+',' ','g')); buf:='';
    if v<>'' then n:=n+1;
     insert into public."TblP132VocabularySourceEntry"("LexiconSourceID","LanguageCode","SourceSurfaceForm","SourceOrder","IsBasic1200","IsCommon2000","SourceTier","ImportStatus")
