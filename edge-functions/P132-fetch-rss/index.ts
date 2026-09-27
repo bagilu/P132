@@ -13,8 +13,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const sb=createClient(
-  Deno.env.get("https://mfljkyvdadxlrbxlboce.supabase.co")!,
-  Deno.env.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbGpreXZkYWR4bHJieGxib2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4MTQwMDUsImV4cCI6MjA4MDM5MDAwNX0.Z4OeacVpO8yM1d1uOWZ6jU2Gl7wgEbhXvAFSqF5pBRs")!,
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   {auth:{persistSession:false}}
 );
 
@@ -40,8 +40,23 @@ function child(el:Element,names:string[]){
   for(const n of names){const q=el.querySelector(n);if(q)return q;} return null;
 }
 
+const corsHeaders={
+  "Access-Control-Allow-Origin":"https://bagilu.github.io",
+  "Access-Control-Allow-Headers":"content-type, x-p132-ingest-secret",
+  "Access-Control-Allow-Methods":"POST, OPTIONS",
+  "Vary":"Origin"
+};
+function respond(body:string,status=200,contentType="text/plain"){
+  return new Response(body,{status,headers:{...corsHeaders,"content-type":contentType}});
+}
+function json(data:unknown,status=200){
+  return new Response(JSON.stringify(data),{status,headers:{...corsHeaders,"content-type":"application/json"}});
+}
+
 Deno.serve(async req=>{
-  if(req.method!=="POST")return new Response("Method not allowed",{status:405});
+  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:corsHeaders});
+
+  if(req.method!=="POST")return respond("Method not allowed",405);
   if(req.headers.get("x-p132-ingest-secret")!==Deno.env.get("P132_INGEST_SECRET"))
     return respond("Unauthorized",401);
 
