@@ -11,6 +11,7 @@
 // localhost/private/link-local targets to reduce SSRF risk.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { XMLParser } from "https://esm.sh/fast-xml-parser@4.5.3";
 
 const sb=createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -25,19 +26,25 @@ function privateHost(h:string){
   const m=x.match(/^172\.(\d+)\./); if(m&&+m[1]>=16&&+m[1]<=31)return true;
   return false;
 }
-function textOf(el:Element|null){return (el?.textContent||"").replace(/\s+/g," ").trim();}
+function val(x:unknown):string{
+  if(x==null)return "";
+  if(typeof x==="string"||typeof x==="number")return String(x).replace(/\s+/g," ").trim();
+  if(Array.isArray(x))return val(x[0]);
+  if(typeof x==="object"){
+    const o=x as Record<string,unknown>;
+    if("#text" in o)return val(o["#text"]);
+    if("_text" in o)return val(o["_text"]);
+  }
+  return "";
+}
 function stripHtml(s:string){
   return s.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ")
     .replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'")
     .replace(/\s+/g," ").trim();
 }
-async function sha256(s:string){
-  const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
-  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
-}
-function child(el:Element,names:string[]){
-  for(const n of names){const q=el.querySelector(n);if(q)return q;} return null;
+function first(obj:Record<string,unknown>,names:string[]){
+  for(const n of names)if(obj[n]!=null)return obj[n]; return null;
 }
 
 const corsHeaders={
@@ -76,23 +83,28 @@ Deno.serve(async req=>{
     const xml=await res.text();
     if(xml.length>5_000_000)throw new Error("Feed too large");
 
-    const doc=new DOMParser().parseFromString(xml,"application/xml");
-    if(!doc)throw new Error("Invalid XML");
-    const items=[...doc.querySelectorAll("item, entry")].slice(0,50);
+    const parser=new XMLParser({ignoreAttributes:false,attributeNamePrefix:"@",textNodeName:"#text",processEntities:true});
+    const parsed=parser.parse(xml);
+    const rawItems=parsed?.rss?.channel?.item ?? parsed?.feed?.entry ?? [];
+    const items=(Array.isArray(rawItems)?rawItems:[rawItems]).filter(Boolean).slice(0,50);
     let imported=0,annotated=0;
 
-    for(const item of items){
-      const title=textOf(child(item,["title"])); if(!title)continue;
-      let link=textOf(child(item,["link"]));
-      const linkEl=child(item,["link"]);
-      if(!link&&linkEl)link=linkEl.getAttribute("href")||"";
+    for(const raw of items){
+      const item=raw as Record<string,unknown>;
+      const title=val(first(item,["title"])); if(!title)continue;
+      const linkObj=first(item,["link"]);
+      let link=val(linkObj);
+      if(linkObj&&typeof linkObj==="object"&&!Array.isArray(linkObj)){
+        const lo=linkObj as Record<string,unknown>;
+        link=val(lo["@href"])||link;
+      }
       if(!link)continue;
-      const guid=textOf(child(item,["guid","id"]));
-      const summaryRaw=textOf(child(item,["description","summary"]));
-      const contentRaw=textOf(child(item,["content\\:encoded","content"]));
+      const guid=val(first(item,["guid","id"]));
+      const summaryRaw=val(first(item,["description","summary"]));
+      const contentRaw=val(first(item,["content:encoded","content"]));
       const summary=stripHtml(summaryRaw);
       const content=stripHtml(contentRaw)||summary;
-      const published=textOf(child(item,["pubDate","published","updated"]));
+      const published=val(first(item,["pubDate","published","updated"]));
       const publishedAt=published&&!Number.isNaN(Date.parse(published))?new Date(published).toISOString():null;
       const externalId=guid||await sha256(link);
       const hash=await sha256(title+"\n"+content);
