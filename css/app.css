@@ -3,3 +3,13 @@
 button:disabled{cursor:not-allowed;opacity:.38;filter:grayscale(.35)}
 
 .toolbar-button{display:inline-block;font:inherit;padding:.65rem;margin:.25rem;border:1px solid #9eaaa3;border-radius:8px;text-decoration:none;background:#fff;color:#315b47;box-sizing:border-box}
+
+.feed-heading{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
+.feed-heading h2{margin:.25rem 0}
+.feed-filters{display:flex;gap:.25rem;flex-wrap:wrap}
+.feed-filter{background:#fff;color:#315b47;border-color:#b8c1bb;padding:.42rem .65rem;margin:0}
+.feed-filter.active{background:#365b48;color:#fff;border-color:#365b48}
+.feed-meta{font-size:.78rem;color:#777;margin-bottom:.25rem}
+.feed-loading{text-align:center;color:#777;padding:.8rem 0;min-height:1.2rem}
+.load-more{display:block;margin:.5rem auto}
+#feedSentinel{height:1px}
