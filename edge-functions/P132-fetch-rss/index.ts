@@ -121,9 +121,13 @@ Deno.serve(async req=>{
       });
       if(ue)throw ue;
       imported++;
-      const {data:ar,error:ae}=await sb.rpc("P132_AnnotateArticleOccurrences",{p_article_id:aid});
-      if(ae)throw ae;
-      annotated+=Number(ar?.inserted||0);
+      // V0.2 matcher is intentionally Chinese-source only.
+      // Foreign-source articles are stored intact for ingestion testing and future Progressive Reconstruction.
+      if(source.LanguageCode==="zh-TW"){
+        const {data:ar,error:ae}=await sb.rpc("P132_AnnotateArticleOccurrences",{p_article_id:aid});
+        if(ae)throw ae;
+        annotated+=Number(ar?.inserted||0);
+      }
     }
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:true,p_error:null});
     return json({source_id:sourceId,items_seen:items.length,articles_upserted:imported,
