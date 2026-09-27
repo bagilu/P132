@@ -46,6 +46,11 @@ function stripHtml(s:string){
 function first(obj:Record<string,unknown>,names:string[]){
   for(const n of names)if(obj[n]!=null)return obj[n]; return null;
 }
+async function sha256(s:string){
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(digest))
+    .map(b=>b.toString(16).padStart(2,"0")).join("");
+}
 
 const corsHeaders={
   "Access-Control-Allow-Origin":"https://bagilu.github.io",
