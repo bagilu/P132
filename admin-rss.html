@@ -49,7 +49,7 @@
 <script>
 const secretEl=document.getElementById('secret');
 const msg=document.getElementById('secretMsg');
-const result=document.getElementById('result');
+const result=document.getElementById('result');\nconst endpoint=document.getElementById('endpoint');
 const KEY='P132_RSS_INGEST_SECRET';
 secretEl.value=sessionStorage.getItem(KEY)||'';
 
@@ -67,6 +67,9 @@ function functionUrl(){
  if(!base||base.includes('YOUR_SUPABASE_URL')) throw new Error('config.js 尚未設定 SUPABASE_URL');
  return base+'/functions/v1/P132-fetch-rss';
 }
+
+try{ endpoint.textContent='Function URL：'+functionUrl(); }
+catch(e){ endpoint.textContent='Function URL 無法建立：'+String(e.message||e); }
 
 document.querySelectorAll('[data-source]').forEach(btn=>{
  btn.onclick=async()=>{
