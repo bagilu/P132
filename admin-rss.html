@@ -15,11 +15,11 @@
 </head>
 <body>
 <header>
-<small>慈濟大學　經營管理學系　好玩實驗室　作品</small>
+<small>慈濟大學　經營管理學系　<a href="https://tcubmdsbilab.github.io/P101/" style="color:inherit">好玩實驗室</a>　作品</small>
 <h1>P132 RSS 管理測試</h1>
 <p>Progressive Immersion · RSS ingestion console</p>
-</header><div style="text-align:center;font-size:11px;opacity:.55;margin:8px 0 14px">P132 Web Version V1.0010</div>
-<main class="admin-wrap">
+</header><div style="text-align:center;font-size:11px;opacity:.55;margin:8px 0 14px">P132 Web Version V1.0011</div>
+<main class="admin-wrap"><p><a class="toolbar-button secondary" href="index.html">← 回到 P132 閱讀首頁</a></p>
 <section class="card">
 <h2>1. 輸入測試密鑰</h2>
 <p>密鑰只保存在這個瀏覽器分頁的 sessionStorage；關閉分頁後即消失，不會寫入 GitHub。</p>
@@ -89,7 +89,11 @@ document.querySelectorAll('[data-source]').forEach(btn=>{
      });
      const raw=await r.text();
      let data;try{data=JSON.parse(raw)}catch{data=raw}
-     if(!r.ok) throw new Error('HTTP '+r.status+'\n'+(typeof data==='string'?data:JSON.stringify(data,null,2)));
+     if(!r.ok){
+       const detail=typeof data==='string'?data:JSON.stringify(data,null,2);
+       if(r.status===401) throw new Error('授權失敗（401）\n請確認 P132_INGEST_SECRET 是否正確；若曾重新設定 Secret，請先清除本頁暫存密鑰後重新輸入。\n\n技術資訊：\n'+detail);
+       throw new Error('HTTP '+r.status+'\n'+detail);
+     }
      result.textContent='抓取成功\n\n'+JSON.stringify(data,null,2);
    }catch(e){
      result.textContent='抓取失敗\n\n'+String(e?.message||e);
