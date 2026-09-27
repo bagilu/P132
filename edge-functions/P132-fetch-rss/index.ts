@@ -43,15 +43,15 @@ function child(el:Element,names:string[]){
 Deno.serve(async req=>{
   if(req.method!=="POST")return new Response("Method not allowed",{status:405});
   if(req.headers.get("x-p132-ingest-secret")!==Deno.env.get("P132_INGEST_SECRET"))
-    return new Response("Unauthorized",{status:401});
+    return respond("Unauthorized",401);
 
   let sourceId:number;
-  try{sourceId=Number((await req.json()).source_id);}catch{return new Response("Bad JSON",{status:400});}
-  if(!Number.isSafeInteger(sourceId)||sourceId<=0)return new Response("Invalid source_id",{status:400});
+  try{sourceId=Number((await req.json()).source_id);}catch{return respond("Bad JSON",400);}
+  if(!Number.isSafeInteger(sourceId)||sourceId<=0)return respond("Invalid source_id",400);
 
   const {data:source,error:se}=await sb.from("TblP132NewsSource").select("*")
     .eq("SourceID",sourceId).eq("IsActive",true).single();
-  if(se||!source)return new Response("Source not found",{status:404});
+  if(se||!source)return respond("Source not found",404);
 
   try{
     const u=new URL(source.FeedURL);
@@ -98,6 +98,6 @@ Deno.serve(async req=>{
       occurrences_inserted:annotated,matcher_version:"P132-MATCH-0.2"});
   }catch(e){
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:false,p_error:String(e)});
-    return Response.json({error:String(e)},{status:500});
+    return json({error:String(e)},500);
   }
 });
