@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P132 RSS 管理測試</title>
+<link rel="stylesheet" href="css/app.css">
+<style>
+.admin-wrap{max-width:850px;margin:0 auto}.source-grid{display:grid;gap:12px;margin-top:16px}
+.source-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px;border:1px solid #ddd;border-radius:12px}
+.source-row strong{display:block}.source-row small{opacity:.7}.secret-row{display:flex;gap:8px;flex-wrap:wrap}.secret-row input{flex:1;min-width:260px}
+#result{white-space:pre-wrap;word-break:break-word;background:#f7f7f7;padding:14px;border-radius:10px;min-height:54px}
+.status-ok{font-weight:700}.status-error{font-weight:700}
+</style>
+</head>
+<body>
+<header>
+<small>慈濟大學　經營管理學系　好玩實驗室　作品</small>
+<h1>P132 RSS 管理測試</h1>
+<p>Progressive Immersion · RSS ingestion console</p>
+</header>
+<main class="admin-wrap">
+<section class="card">
+<h2>1. 輸入測試密鑰</h2>
+<p>密鑰只保存在這個瀏覽器分頁的 sessionStorage；關閉分頁後即消失，不會寫入 GitHub。</p>
+<div class="secret-row">
+<input id="secret" type="password" autocomplete="off" placeholder="P132_INGEST_SECRET">
+<button id="saveSecret">暫存密鑰</button>
+<button id="clearSecret" class="secondary">清除</button>
+</div>
+<p id="secretMsg"></p>
+</section>
+
+<section class="card">
+<h2>2. 選擇 RSS 來源</h2>
+<div class="source-grid">
+<div class="source-row"><div><strong>中央社－生活</strong><small>SourceID 2</small></div><button data-source="2">立即抓取</button></div>
+<div class="source-row"><div><strong>中央社－科技</strong><small>SourceID 3</small></div><button data-source="3">立即抓取</button></div>
+<div class="source-row"><div><strong>中央社－文化</strong><small>SourceID 4</small></div><button data-source="4">立即抓取</button></div>
+</div>
+</section>
+
+<section class="card">
+<h2>3. 執行結果</h2>
+<div id="result">尚未執行。</div>
+</section>
+</main>
+<script src="config.js"></script>
+<script>
+const secretEl=document.getElementById('secret');
+const msg=document.getElementById('secretMsg');
+const result=document.getElementById('result');
+const KEY='P132_RSS_INGEST_SECRET';
+secretEl.value=sessionStorage.getItem(KEY)||'';
+
+document.getElementById('saveSecret').onclick=()=>{
+ const v=secretEl.value.trim();
+ if(!v){msg.textContent='請先輸入密鑰。';return;}
+ sessionStorage.setItem(KEY,v); msg.textContent='已暫存在本分頁。';
+};
+document.getElementById('clearSecret').onclick=()=>{
+ sessionStorage.removeItem(KEY);secretEl.value='';msg.textContent='已清除。';
+};
+
+function functionUrl(){
+ const base=(window.P132_CONFIG?.SUPABASE_URL||'').replace(/\/$/,'');
+ if(!base||base.includes('YOUR_SUPABASE_URL')) throw new Error('config.js 尚未設定 SUPABASE_URL');
+ return base+'/functions/v1/P132-fetch-rss';
+}
+
+document.querySelectorAll('[data-source]').forEach(btn=>{
+ btn.onclick=async()=>{
+   const secret=(secretEl.value.trim()||sessionStorage.getItem(KEY)||'');
+   if(!secret){result.textContent='請先在上方輸入 P132_INGEST_SECRET。';return;}
+   sessionStorage.setItem(KEY,secret);
+   const sourceId=Number(btn.dataset.source);
+   const old=btn.textContent; btn.disabled=true; btn.textContent='抓取中…';
+   result.textContent='正在呼叫 P132-fetch-rss，請稍候…';
+   try{
+     const r=await fetch(functionUrl(),{
+       method:'POST',
+       headers:{'content-type':'application/json','x-p132-ingest-secret':secret},
+       body:JSON.stringify({source_id:sourceId})
+     });
+     const raw=await r.text();
+     let data;try{data=JSON.parse(raw)}catch{data=raw}
+     if(!r.ok) throw new Error('HTTP '+r.status+'\n'+(typeof data==='string'?data:JSON.stringify(data,null,2)));
+     result.textContent='抓取成功\n\n'+JSON.stringify(data,null,2);
+   }catch(e){
+     result.textContent='抓取失敗\n\n'+String(e?.message||e);
+   }finally{btn.disabled=false;btn.textContent=old;}
+ };
+});
+</script>
+</body></html>
