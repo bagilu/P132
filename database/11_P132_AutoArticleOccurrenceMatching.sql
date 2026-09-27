@@ -47,18 +47,20 @@ begin
   ) on commit drop;
   truncate pg_temp.p132_match_candidate;
 
-  -- Generate every exact occurrence of reviewed Chinese lexical candidates.
+  -- Generate every exact occurrence. generate_series gives reliable character offsets
+  -- without relying on regex byte/character position behavior.
   insert into pg_temp.p132_match_candidate
     ("ConceptID","OriginalText","StartOffset","EndOffset","TokenLength")
   select distinct c."ConceptID",c."CanonicalZh",
-         m.start0,m.start0+char_length(c."CanonicalZh"),char_length(c."CanonicalZh")
+         pos-1,(pos-1)+char_length(c."CanonicalZh"),char_length(c."CanonicalZh")
   from public."TblP132VocabularyConcept" c
-  cross join lateral (
-    select (x.m)[1]::integer-1 as start0
-    from regexp_matches(body,'(?='||regexp_replace(c."CanonicalZh",'([\\.\\^\\$\\|\\(\\)\\[\\]\\{\\}\\*\\+\\?\\\\])','\\\\\\1','g')||')','g') with ordinality x(m,ord)
-  ) m
+  cross join lateral generate_series(
+    1,
+    greatest(1,length(body)-char_length(c."CanonicalZh")+1)
+  ) pos
   where c."IsActive" and c."ReviewStatus"='approved'
     and char_length(c."CanonicalZh")>=1
+    and substring(body from pos for char_length(c."CanonicalZh"))=c."CanonicalZh"
     and exists(
       select 1 from public."TblP132ConceptInfiltrationPolicy" p
       where p."ConceptID"=c."ConceptID" and p."Phase1Eligible"
@@ -69,58 +71,42 @@ begin
       where f."ConceptID"=c."ConceptID" and f."LanguageCode" in('en','ja') and f."IsActive"
     );
 
-  -- Remove candidates overlapping existing curated/manual occurrences.
+  -- Existing curated/manual occurrences always win.
   delete from pg_temp.p132_match_candidate c
   using public."TblP132ArticleOccurrence" o
   where o."ArticleID"=p_article_id
     and c."StartOffset"<o."EndOffset" and c."EndOffset">o."StartOffset";
 
-  -- Longest-match-first globally; insert only non-overlapping candidates.
-  -- The NOT EXISTS against the destination also makes this function idempotent.
-  with ranked as (
-    select c.*,
-      row_number() over(order by c."TokenLength" desc,c."StartOffset",c."ConceptID") as rn
-    from pg_temp.p132_match_candidate c
-  ),
-  recursive_pick as (
-    select r.* from ranked r
-    where r.rn=(select min(r2.rn) from ranked r2)
-    union all
-    select n.*
-    from recursive_pick p
-    join lateral(
-      select r.*
-      from ranked r
-      where r.rn>p.rn
-        and not exists(
-          select 1 from ranked chosen
-          where chosen.rn<=p.rn
-            and chosen."TokenLength">=r."TokenLength"
-            and chosen."StartOffset"<r."EndOffset"
-            and chosen."EndOffset">r."StartOffset"
-        )
-      order by r.rn limit 1
-    ) n on true
-  ),
-  chosen as (
-    select distinct on("StartOffset","EndOffset")
-      "ConceptID","OriginalText","StartOffset","EndOffset"
-    from recursive_pick
-    order by "StartOffset","EndOffset","ConceptID"
-  )
+  -- Phrase-first / longest meaningful match.
+  -- For equal-length overlaps, prefer the earlier span, then the lower ConceptID.
+  delete from pg_temp.p132_match_candidate loser
+  where exists(
+    select 1 from pg_temp.p132_match_candidate winner
+    where winner."ConceptID"<>loser."ConceptID"
+      and winner."StartOffset"<loser."EndOffset"
+      and winner."EndOffset">loser."StartOffset"
+      and (
+        winner."TokenLength">loser."TokenLength"
+        or (winner."TokenLength"=loser."TokenLength" and winner."StartOffset"<loser."StartOffset")
+        or (winner."TokenLength"=loser."TokenLength" and winner."StartOffset"=loser."StartOffset"
+            and winner."ConceptID"<loser."ConceptID")
+      )
+  );
+
   insert into public."TblP132ArticleOccurrence"
     ("ArticleID","ConceptID","OriginalText","StartOffset","EndOffset",
      "ContextText","ReplacementEligible","MatchConfidence")
-  select p_article_id,ch."ConceptID",ch."OriginalText",ch."StartOffset",ch."EndOffset",
-         substring(body from greatest(1,ch."StartOffset"-30)+1
-                   for least(length(body),ch."EndOffset"+30)-greatest(0,ch."StartOffset"-30)),
+  select p_article_id,c."ConceptID",c."OriginalText",c."StartOffset",c."EndOffset",
+         substring(body from greatest(1,c."StartOffset"-30)+1
+                   for least(length(body),c."EndOffset"+30)-greatest(0,c."StartOffset"-30)),
          true,1.0000
-  from chosen ch
+  from pg_temp.p132_match_candidate c
   where not exists(
     select 1 from public."TblP132ArticleOccurrence" o
     where o."ArticleID"=p_article_id
-      and ch."StartOffset"<o."EndOffset" and ch."EndOffset">o."StartOffset"
+      and c."StartOffset"<o."EndOffset" and c."EndOffset">o."StartOffset"
   )
+  order by c."StartOffset"
   on conflict("ArticleID","StartOffset","EndOffset") do nothing;
 
   get diagnostics inserted_count=row_count;
