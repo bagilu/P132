@@ -21,7 +21,8 @@ declare
   body text;
   inserted_count integer:=0;
 begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  -- Back-office function: intentionally no auth.uid() requirement.
+  -- Access is controlled by EXECUTE privilege (service_role / postgres only).
 
   select * into a
   from public."TblP132Article"
@@ -128,7 +129,8 @@ set search_path=public,pg_temp
 as $$
 declare r record; n int:=0; total_inserted int:=0; result jsonb;
 begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  -- Back-office batch function: intentionally no auth.uid() requirement.
+  -- Access is controlled by EXECUTE privilege (service_role / postgres only).
   for r in
     select "ArticleID" from public."TblP132Article"
     where "IsPublished" and "LanguageCode"='zh-TW'
@@ -143,10 +145,17 @@ begin
                             'matcher_version','P132-MATCH-0.2');
 end $$;
 
+-- Back-office only. Do not expose annotation RPCs to anon/authenticated learners.
 revoke all on function public."P132_AnnotateArticleOccurrences"(bigint) from public;
+revoke all on function public."P132_AnnotateArticleOccurrences"(bigint) from anon;
+revoke all on function public."P132_AnnotateArticleOccurrences"(bigint) from authenticated;
 revoke all on function public."P132_AnnotatePublishedArticles"(integer) from public;
-grant execute on function public."P132_AnnotateArticleOccurrences"(bigint) to authenticated;
-grant execute on function public."P132_AnnotatePublishedArticles"(integer) to authenticated;
+revoke all on function public."P132_AnnotatePublishedArticles"(integer) from anon;
+revoke all on function public."P132_AnnotatePublishedArticles"(integer) from authenticated;
+
+-- service_role is used by the trusted ingestion/Edge pipeline.
+grant execute on function public."P132_AnnotateArticleOccurrences"(bigint) to service_role;
+grant execute on function public."P132_AnnotatePublishedArticles"(integer) to service_role;
 
 -- Audit: automatic/manual occurrences currently available.
 select a."ExternalID",count(o."OccurrenceID") as "OccurrenceCount"
