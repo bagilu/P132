@@ -42,6 +42,7 @@
 
 <section class="card">
 <h2>3. 執行結果</h2>
+<div id="endpoint" style="margin-bottom:10px;word-break:break-all">正在建立 Function URL…</div>
 <div id="result">尚未執行。</div>
 </section>
 </main>
@@ -49,7 +50,8 @@
 <script>
 const secretEl=document.getElementById('secret');
 const msg=document.getElementById('secretMsg');
-const result=document.getElementById('result');\nconst endpoint=document.getElementById('endpoint');
+const result=document.getElementById('result');
+const endpoint=document.getElementById('endpoint');
 const KEY='P132_RSS_INGEST_SECRET';
 secretEl.value=sessionStorage.getItem(KEY)||'';
 
