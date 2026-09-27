@@ -126,7 +126,7 @@ Deno.serve(async req=>{
       annotated+=Number(ar?.inserted||0);
     }
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:true,p_error:null});
-    return Response.json({source_id:sourceId,items_seen:items.length,articles_upserted:imported,
+    return json({source_id:sourceId,items_seen:items.length,articles_upserted:imported,
       occurrences_inserted:annotated,matcher_version:"P132-MATCH-0.2"});
   }catch(e){
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:false,p_error:String(e)});
