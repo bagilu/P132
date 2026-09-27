@@ -1,7 +1,7 @@
 (() => {
  const C=window.P132_CONFIG;if(!C){document.body.innerHTML='<main><h2>尚未建立 config.js</h2><p>請由 config-sample.js 複製建立 config.js。</p></main>';return;}
  const sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{storageKey:'P132-auth',persistSession:true}});
- const $=id=>document.getElementById(id); let current=null,showOriginal=false,activePopover=null,feedItems=[],currentFeedIndex=-1;
+ const $=id=>document.getElementById(id); let current=null,showOriginal=false,activePopover=null,feedItems=[],currentFeedIndex=-1,feedLang='',feedLoading=false,feedDone=false,feedCursor=null,feedObserver=null;
  ['registerLink','forgotLink'].forEach(id=>$(id).href=C.P130_URL||'#');
  async function boot(){const {data:{session}}=await sb.auth.getSession();show(session);if(session)await init();}
  function show(s){$('auth').hidden=!!s;$('app').hidden=!s;}
@@ -9,7 +9,25 @@
  $('logout').onclick=async()=>{await sb.auth.signOut();location.reload();};
  $('lang').onchange=async()=>{await sb.rpc('P132_SetTargetLanguage',{p_language:$('lang').value});await loadFeed();};
  async function init(){const {data:p,error}=await sb.rpc('P132_EnsureLearnerProfile');if(error)return alert(error.message);if(p?.target_language)$('lang').value=p.target_language;await loadFeed();}
- async function loadFeed(){ $('reader').hidden=true; const {data,error}=await sb.rpc('P132_GetReadingFeed',{p_limit:20}); if(error){$('feed').textContent=error.message;return;} $('feed').innerHTML=''; feedItems=data||[]; feedItems.forEach((a,i)=>{const d=document.createElement('div');d.className='feed-item';d.innerHTML=`<h3>${esc(a.title)}</h3><p>${esc(a.summary||'')}</p><button>開始閱讀</button>`;d.querySelector('button').onclick=()=>openArticle(a.article_id,i);$('feed').appendChild(d);});}
+ function appendFeedItem(a){const i=feedItems.length;feedItems.push(a);const d=document.createElement('div');d.className='feed-item';d.innerHTML=`<div class="feed-meta">${esc(a.source_name||'')} · ${esc(a.language_code||'')}</div><h3>${esc(a.title)}</h3><p>${esc(a.summary||'')}</p><button>開始閱讀</button>`;d.querySelector('button').onclick=()=>openArticle(a.article_id,i);$('feed').appendChild(d);}
+ async function loadFeed(reset=true){
+   if(feedLoading||(feedDone&&!reset))return;
+   if(reset){feedItems=[];feedCursor=null;feedDone=false;$('feed').innerHTML='';$('feedLoading').textContent='';}
+   feedLoading=true;$('feedLoading').textContent=reset?'正在載入新聞……':'正在載入較早的新聞……';$('loadMore').hidden=true;
+   const args={p_limit:20,p_language_filter:feedLang||null,p_before_sort_at:feedCursor?.sort_at||null,p_before_article_id:feedCursor?.article_id||null};
+   const {data,error}=await sb.rpc('P132_GetReadingFeedPage',args);
+   feedLoading=false;
+   if(error){$('feedLoading').textContent=error.message;$('loadMore').hidden=false;return;}
+   const rows=data||[];rows.forEach(appendFeedItem);
+   if(rows.length){const last=rows[rows.length-1];feedCursor={sort_at:last.sort_at,article_id:last.article_id};}
+   feedDone=rows.length<20;
+   $('feedLoading').textContent=feedDone?(feedItems.length?'已經沒有更早的新聞了。':'目前沒有這個語言的新聞。'):'';
+   $('loadMore').hidden=feedDone;
+ }
+ document.querySelectorAll('.feed-filter').forEach(b=>b.onclick=async()=>{document.querySelectorAll('.feed-filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');feedLang=b.dataset.feedLang||'';$('reader').hidden=true;$('feed').parentElement.hidden=false;await loadFeed(true);});
+ $('loadMore').onclick=()=>loadFeed(false);
+ feedObserver=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)&&!feedDone&&!feedLoading&&feedItems.length)loadFeed(false);},{rootMargin:'500px 0px'});
+ feedObserver.observe($('feedSentinel'));
  async function openArticle(id,index=null){if(index!==null)currentFeedIndex=index;const {data:sid,error:sessionError}=await sb.rpc('P132_StartReadingSession',{p_article_id:id});if(sessionError)return alert(sessionError.message);const {data,error}=await sb.rpc('P132_PrepareArticle',{p_article_id:id,p_reading_session_id:sid});if(error)return alert(error.message);current=data;showOriginal=false;$('toggleOriginal').textContent='顯示原文';$('prevArticle').disabled=currentFeedIndex<=0;$('nextArticle').disabled=currentFeedIndex<0||currentFeedIndex>=feedItems.length-1;$('readerStatus').textContent=currentFeedIndex===feedItems.length-1?'已經是最後一則新聞。':'';$('title').textContent=data.title;$('sourceLink').href=data.original_url;$('feed').parentElement.hidden=true;$('reader').hidden=false;renderSegments(data.segments||[]);}
  function closePopover(){if(activePopover){activePopover.remove();activePopover=null;}}
  function openPopover(anchor,s){closePopover();const pop=document.createElement('div');pop.className='translation-popover';pop.innerHTML='<div class="popover-head">中文意思</div><div class="popover-meaning">讀取中…</div>';document.body.appendChild(pop);const r=anchor.getBoundingClientRect();const pr=pop.getBoundingClientRect();let left=Math.min(window.innerWidth-pr.width-8,Math.max(8,r.left));let top=r.bottom+6;if(top+pr.height>window.innerHeight-8)top=Math.max(8,r.top-pr.height-6);pop.style.left=left+'px';pop.style.top=top+'px';activePopover=pop;sb.rpc('P132_RequestTranslation',{p_exposure_id:s.exposure_id}).then(({data,error})=>{if(!pop.isConnected)return;pop.querySelector('.popover-meaning').textContent=error?error.message:(data?.meaning_zh||'—');});}
