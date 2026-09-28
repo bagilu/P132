@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>P132 RSS 管理測試</title>
-<link rel="stylesheet" href="css/app.css?v=1.0012">
+<link rel="stylesheet" href="css/app.css?v=1.0014">
 <style>
 .admin-wrap{max-width:850px;margin:0 auto}.source-grid{display:grid;gap:12px;margin-top:16px}
 .source-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px;border:1px solid #ddd;border-radius:12px}
@@ -18,7 +18,7 @@
 <small>慈濟大學　經營管理學系　<a href="https://tcubmdsbilab.github.io/P101/" style="color:inherit">好玩實驗室</a>　作品</small>
 <h1>P132 RSS 管理測試</h1>
 <p>Progressive Immersion · RSS ingestion console</p>
-</header><div style="text-align:center;font-size:11px;opacity:.55;margin:8px 0 14px">P132 Web Version V1.0012</div>
+</header><div style="text-align:center;font-size:11px;opacity:.55;margin:8px 0 14px">P132 Web Version V1.0014</div>
 <main class="admin-wrap"><p><a class="toolbar-button secondary" href="index.html">← 回到 P132 閱讀首頁</a></p>
 <section class="card">
 <h2>1. 輸入測試密鑰</h2>
@@ -44,7 +44,6 @@
 
 <section class="card">
 <h2>3. 執行結果</h2>
-<div id="endpoint" style="margin-bottom:10px;word-break:break-all">正在建立 Function URL…</div>
 <div id="result">尚未執行。</div>
 </section>
 </main>
@@ -53,7 +52,6 @@
 const secretEl=document.getElementById('secret');
 const msg=document.getElementById('secretMsg');
 const result=document.getElementById('result');
-const endpoint=document.getElementById('endpoint');
 const KEY='P132_RSS_INGEST_SECRET';
 secretEl.value=sessionStorage.getItem(KEY)||'';
 
@@ -72,8 +70,6 @@ function functionUrl(){
  return base+'/functions/v1/P132-fetch-rss';
 }
 
-try{ endpoint.textContent='Function URL：'+functionUrl(); }
-catch(e){ endpoint.textContent='Function URL 無法建立：'+String(e.message||e); }
 
 document.querySelectorAll('[data-source]').forEach(btn=>{
  btn.onclick=async()=>{
