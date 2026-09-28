@@ -92,7 +92,7 @@ Deno.serve(async req=>{
     const parsed=parser.parse(xml);
     const rawItems=parsed?.rss?.channel?.item ?? parsed?.feed?.entry ?? [];
     const items=(Array.isArray(rawItems)?rawItems:[rawItems]).filter(Boolean).slice(0,50);
-    let imported=0,annotated=0,foreignAnalyzed=0,foreignDeferred=0; const analysisResults:unknown[]=[];
+    let imported=0,annotated=0,foreignAnalyzed=0,foreignDeferred=0,foreignSkipped=0,foreignFailed=0; const analysisResults:unknown[]=[];
 
     for(const raw of items){
       const item=raw as Record<string,unknown>;
@@ -128,21 +128,39 @@ Deno.serve(async req=>{
         if(ae)throw ae;
         annotated+=Number(ar?.occurrences_inserted??ar?.inserted??0);
       }else if(source.LanguageCode==="en"||source.LanguageCode==="ja"){
-        const analyzerUrl=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"")+"/functions/v1/P132-analyze-foreign";
-        const rr=await fetch(analyzerUrl,{method:"POST",headers:{
-          "content-type":"application/json",
-          "x-p132-ingest-secret":Deno.env.get("P132_INGEST_SECRET")||""
-        },body:JSON.stringify({article_id:Number(aid)})});
-        const raw=await rr.text();let ar:unknown;try{ar=JSON.parse(raw)}catch{ar={raw}}
-        if(!rr.ok)throw new Error("Foreign analyzer HTTP "+rr.status+": "+raw);
-        analysisResults.push(ar);
-        if((ar as Record<string,unknown>)?.status==="deferred")foreignDeferred++;else foreignAnalyzed++;
+        // Some RSS entries contain title/link metadata but no usable summary/content.
+        // Keep the article, but do not let one empty item fail the whole RSS batch.
+        if(!content.trim()){
+          foreignSkipped++;
+          analysisResults.push({article_id:Number(aid),language:source.LanguageCode,status:"skipped",reason:"empty_article"});
+        }else{
+          const analyzerUrl=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"")+"/functions/v1/P132-analyze-foreign";
+          try{
+            const rr=await fetch(analyzerUrl,{method:"POST",headers:{
+              "content-type":"application/json",
+              "x-p132-ingest-secret":Deno.env.get("P132_INGEST_SECRET")||""
+            },body:JSON.stringify({article_id:Number(aid)})});
+            const raw=await rr.text();let ar:unknown;try{ar=JSON.parse(raw)}catch{ar={raw}}
+            if(!rr.ok){
+              foreignFailed++;
+              analysisResults.push({article_id:Number(aid),language:source.LanguageCode,status:"failed",
+                http_status:rr.status,error:raw});
+            }else{
+              analysisResults.push(ar);
+              if((ar as Record<string,unknown>)?.status==="deferred")foreignDeferred++;else foreignAnalyzed++;
+            }
+          }catch(e){
+            foreignFailed++;
+            analysisResults.push({article_id:Number(aid),language:source.LanguageCode,status:"failed",error:String(e)});
+          }
+        }
       }
     }
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:true,p_error:null});
     return json({source_id:sourceId,items_seen:items.length,articles_upserted:imported,
       occurrences_inserted:annotated,foreign_articles_analyzed:foreignAnalyzed,
-      foreign_articles_deferred:foreignDeferred,analysis_results:analysisResults,
+      foreign_articles_deferred:foreignDeferred,foreign_articles_skipped:foreignSkipped,
+      foreign_articles_failed:foreignFailed,analysis_results:analysisResults,
       ingestion_version:"P132-RSS-0.3"});
   }catch(e){
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:false,p_error:String(e)});
