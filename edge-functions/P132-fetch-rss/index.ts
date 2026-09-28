@@ -1,4 +1,4 @@
-// P132 V0.2 — RSS ingestion Edge Function (canonical P-series name)
+// P132 V0.3 — RSS ingestion + automatic linguistic annotation
 // Required secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, P132_INGEST_SECRET
 // Canonical function name: P132-fetch-rss
 //
@@ -92,7 +92,7 @@ Deno.serve(async req=>{
     const parsed=parser.parse(xml);
     const rawItems=parsed?.rss?.channel?.item ?? parsed?.feed?.entry ?? [];
     const items=(Array.isArray(rawItems)?rawItems:[rawItems]).filter(Boolean).slice(0,50);
-    let imported=0,annotated=0;
+    let imported=0,annotated=0,foreignAnalyzed=0,foreignDeferred=0; const analysisResults:unknown[]=[];
 
     for(const raw of items){
       const item=raw as Record<string,unknown>;
@@ -121,17 +121,29 @@ Deno.serve(async req=>{
       });
       if(ue)throw ue;
       imported++;
-      // V0.2 matcher is intentionally Chinese-source only.
-      // Foreign-source articles are stored intact for ingestion testing and future Progressive Reconstruction.
+      // Annotation/analysis is a back-office ingestion responsibility:
+      // Chinese -> lexical/protected-span pipeline; foreign -> language-specific analyzer.
       if(source.LanguageCode==="zh-TW"){
-        const {data:ar,error:ae}=await sb.rpc("P132_AnnotateArticleOccurrences",{p_article_id:aid});
+        const {data:ar,error:ae}=await sb.rpc("P132_AnnotateArticle",{p_article_id:aid});
         if(ae)throw ae;
-        annotated+=Number(ar?.inserted||0);
+        annotated+=Number(ar?.occurrences_inserted??ar?.inserted??0);
+      }else if(source.LanguageCode==="en"||source.LanguageCode==="ja"){
+        const analyzerUrl=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"")+"/functions/v1/P132-analyze-foreign";
+        const rr=await fetch(analyzerUrl,{method:"POST",headers:{
+          "content-type":"application/json",
+          "x-p132-ingest-secret":Deno.env.get("P132_INGEST_SECRET")||""
+        },body:JSON.stringify({article_id:Number(aid)})});
+        const raw=await rr.text();let ar:unknown;try{ar=JSON.parse(raw)}catch{ar={raw}}
+        if(!rr.ok)throw new Error("Foreign analyzer HTTP "+rr.status+": "+raw);
+        analysisResults.push(ar);
+        if((ar as Record<string,unknown>)?.status==="deferred")foreignDeferred++;else foreignAnalyzed++;
       }
     }
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:true,p_error:null});
     return json({source_id:sourceId,items_seen:items.length,articles_upserted:imported,
-      occurrences_inserted:annotated,matcher_version:"P132-MATCH-0.2"});
+      occurrences_inserted:annotated,foreign_articles_analyzed:foreignAnalyzed,
+      foreign_articles_deferred:foreignDeferred,analysis_results:analysisResults,
+      ingestion_version:"P132-RSS-0.3"});
   }catch(e){
     await sb.rpc("P132_MarkRSSFetch",{p_source_id:sourceId,p_ok:false,p_error:String(e)});
     return json({error:String(e)},500);
