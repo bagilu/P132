@@ -1,4 +1,4 @@
-// P132 Foreign Linguistic Analyzer V0.1
+// P132 Foreign Linguistic Analyzer V0.1.1
 // Canonical function name: P132-analyze-foreign
 // Run after database/17E_P132_ForeignLinguisticAnalysisArchitecture.sql
 //
@@ -125,7 +125,7 @@ Deno.serve(async req=>{
      reason:"Japanese morphological analyzer not connected in P132 Foreign Linguistic Analyzer V0.1"},200);
    const body=(a.ContentText||a.Summary||"").trim();if(!body)return json({error:"Empty article"},400);
    const {data:rid,error:be}=await sb.rpc("P132_BeginForeignAnalysis",{
-     p_article_id:articleId,p_analyzer_name:"P132-edge-english-baseline",p_analyzer_version:"0.1",
+     p_article_id:articleId,p_analyzer_name:"P132-edge-english-baseline",p_analyzer_version:"0.1.1",
      p_model_name:null,p_model_version:null,p_metadata:{strategy:"rule_pos_noun_chunk_mwe"}});
    if(be)throw be;runId=Number(rid);
    const toks=tokenize(body),cands=candidates(body,toks);
