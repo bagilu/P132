@@ -1,4 +1,4 @@
-// P132 Foreign Linguistic Analyzer V0.1.1
+// P132 Foreign Linguistic Analyzer V0.1.2
 // Canonical function name: P132-analyze-foreign
 // Run after database/17E_P132_ForeignLinguisticAnalysisArchitecture.sql
 //
@@ -39,7 +39,7 @@ const timeWords=new Set(["year","years","day","days","week","weeks","month","mon
 
 function lemma(w:string,pos:string){
  const x=w.toLowerCase();
- const irregular:Record<string,string>={was:"be",were:"be",is:"be",are:"be",been:"be",has:"have",had:"have",did:"do",made:"make",built:"build"};
+ const irregular:Record<string,string>={was:"be",were:"be",is:"be",are:"be",been:"be",has:"have",had:"have",did:"do",made:"make",built:"build",proved:"prove",used:"use",moved:"move",loved:"love",lived:"live",saved:"save"};
  if(irregular[x])return irregular[x];
  if(pos==="VERB"&&x.endsWith("ied")&&x.length>4)return x.slice(0,-3)+"y";
  if(pos==="VERB"&&x.endsWith("ed")&&x.length>4)return x.slice(0,-2).replace(/([b-df-hj-np-tv-z])\1$/,"$1");
@@ -125,7 +125,7 @@ Deno.serve(async req=>{
      reason:"Japanese morphological analyzer not connected in P132 Foreign Linguistic Analyzer V0.1"},200);
    const body=(a.ContentText||a.Summary||"").trim();if(!body)return json({error:"Empty article"},400);
    const {data:rid,error:be}=await sb.rpc("P132_BeginForeignAnalysis",{
-     p_article_id:articleId,p_analyzer_name:"P132-edge-english-baseline",p_analyzer_version:"0.1.1",
+     p_article_id:articleId,p_analyzer_name:"P132-edge-english-baseline",p_analyzer_version:"0.1.2",
      p_model_name:null,p_model_version:null,p_metadata:{strategy:"rule_pos_noun_chunk_mwe"}});
    if(be)throw be;runId=Number(rid);
    const toks=tokenize(body),cands=candidates(body,toks);
