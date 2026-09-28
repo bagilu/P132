@@ -13,3 +13,6 @@ button:disabled{cursor:not-allowed;opacity:.38;filter:grayscale(.35)}
 .feed-loading{text-align:center;color:#777;padding:.8rem 0;min-height:1.2rem}
 .load-more{display:block;margin:.5rem auto}
 #feedSentinel{height:1px}
+
+/* V1.0015 foreign assisted reading */
+.foreign-term .word{background:transparent;border-bottom:1px dotted #a9b6ae;font-weight:600}.foreign-term.function-word .word{font-weight:400;border-bottom-color:#d8ddd9}.foreign-term.function-word .micro-actions{opacity:.72}.meaning-entry{display:flex;gap:.35rem;align-items:center;margin-top:.55rem}.meaning-entry input{min-width:0;flex:1;margin:0;padding:.45rem}.meaning-entry button{white-space:nowrap;margin:0;padding:.45rem .6rem}@media(max-width:600px){.meaning-entry{align-items:stretch;flex-direction:column}}
